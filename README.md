@@ -56,6 +56,10 @@ xdg-open index.html
 3. Branch: `main` / `/ (root)` 선택 → Save
 4. 배포 URL: `https://<유저명>.github.io/<저장소명>/`
 
+> **참고**: 저장소 root에 빈 `.nojekyll` 파일이 포함되어 있어
+> GitHub Pages가 Jekyll 빌드를 건너뛰고 정적 파일을 그대로 서빙합니다.
+> 이 파일이 없으면 "Package a Jekyll site..." 같은 빌드 에러가 발생할 수 있습니다.
+
 #### Netlify
 
 1. [Netlify](https://app.netlify.com/) 로그인 → "Add new site" → "Import from Git"
