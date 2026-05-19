@@ -1,0 +1,2102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>온라인 서점 서지 등록 — 비상교육</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Pretendard:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/docx.umd.js"></script>
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --ink-soft: #4a4a4a;
+    --ink-muted: #8a8a8a;
+    --paper: #faf8f3;
+    --paper-2: #f3efe6;
+    --line: #d8d2c4;
+    --line-soft: #e8e3d6;
+    --accent: #8b2f1f;
+    --accent-soft: #c4604f;
+    --ok: #2d5a3d;
+    --warn: #b8860b;
+    --sidebar-w: 260px;
+    --shadow: 0 1px 0 rgba(0,0,0,0.04), 0 8px 24px -12px rgba(0,0,0,0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  /* ===== Layout: Sidebar + Main ===== */
+  .app {
+    display: grid;
+    grid-template-columns: var(--sidebar-w) 1fr;
+    min-height: 100vh;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    background: var(--ink);
+    color: #ddd;
+    padding: 32px 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar-brand {
+    padding: 0 24px 24px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    margin-bottom: 16px;
+  }
+  .sidebar-brand .kicker {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: var(--accent-soft);
+    text-transform: uppercase;
+  }
+  .sidebar-brand h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 20px;
+    color: white;
+    line-height: 1.25;
+    margin-top: 6px;
+  }
+  .sidebar-brand h1 em {
+    font-style: italic;
+    font-weight: 400;
+    color: rgba(255,255,255,0.6);
+    display: block;
+  }
+
+  .nav-section-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: rgba(255,255,255,0.4);
+    text-transform: uppercase;
+    padding: 12px 24px 8px;
+  }
+
+  .nav {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 24px;
+    cursor: pointer;
+    color: rgba(255,255,255,0.7);
+    transition: all 0.15s;
+    border-left: 3px solid transparent;
+    position: relative;
+  }
+  .nav-item:hover {
+    color: white;
+    background: rgba(255,255,255,0.04);
+  }
+  .nav-item.active {
+    color: white;
+    background: rgba(196,96,79,0.12);
+    border-left-color: var(--accent-soft);
+  }
+  .nav-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
+    width: 18px;
+  }
+  .nav-item.active .nav-num { color: var(--accent-soft); }
+  .nav-label { font-size: 13px; flex: 1; }
+  .nav-badge {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ok);
+    display: none;
+  }
+  .nav-item.completed .nav-badge { display: block; }
+
+  .sidebar-foot {
+    padding: 16px 24px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.06em;
+  }
+  .sidebar-foot div { margin-bottom: 2px; }
+  .sidebar-foot .ver { color: var(--accent-soft); }
+
+  /* Main */
+  .main {
+    background: var(--paper);
+    padding: 48px 56px 80px;
+    position: relative;
+  }
+  .main::before {
+    content: '';
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    left: var(--sidebar-w);
+    background-image: radial-gradient(circle at 1px 1px, rgba(0,0,0,0.025) 1px, transparent 0);
+    background-size: 24px 24px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .main-inner {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+  }
+
+  /* Page header inside main */
+  .page-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--ink);
+    margin-bottom: 32px;
+  }
+  .page-title { display: flex; flex-direction: column; gap: 6px; }
+  .page-title .crumb {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+  .page-title h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 30px;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .page-title h2 em {
+    font-style: italic;
+    font-weight: 400;
+    color: var(--ink-soft);
+  }
+  .page-desc {
+    font-size: 13px;
+    color: var(--ink-soft);
+    max-width: 560px;
+    text-align: right;
+    line-height: 1.5;
+  }
+
+  /* View toggle */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* Panel */
+  .panel {
+    background: white;
+    border: 1px solid var(--line);
+    margin-bottom: 24px;
+  }
+  .panel-head {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--line-soft);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    background: linear-gradient(to bottom, rgba(243,239,230,0.5), white);
+  }
+  .panel-head h3 {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 500;
+  }
+  .panel-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.12em;
+  }
+  .panel-body { padding: 24px; }
+
+  /* Form */
+  .field-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px 20px;
+  }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field.full { grid-column: 1 / -1; }
+  .field label {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-soft);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .field label .req { color: var(--accent); }
+  .field input, .field textarea, .field select {
+    border: 1px solid var(--line);
+    background: var(--paper);
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--ink);
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .field input:focus, .field textarea:focus, .field select:focus {
+    outline: none;
+    border-color: var(--ink);
+    background: white;
+  }
+  .field input:disabled, .field select:disabled {
+    background: var(--paper-2);
+    color: var(--ink-muted);
+    cursor: not-allowed;
+  }
+  .field textarea {
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.6;
+  }
+
+  /* Cascade selector */
+  .cascade {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    padding: 20px;
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    margin-bottom: 24px;
+  }
+  .cascade .field input, .cascade .field select { background: white; }
+
+  /* Selected book chip */
+  .selected-book {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    background: white;
+    border: 1px solid var(--ink);
+    margin-bottom: 20px;
+  }
+  .selected-book.empty {
+    border-style: dashed;
+    border-color: var(--line);
+    color: var(--ink-muted);
+    font-style: italic;
+  }
+  .selected-book .chip-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+  .selected-book .chip-title {
+    font-family: 'Fraunces', serif;
+    font-size: 17px;
+    font-weight: 500;
+    flex: 1;
+  }
+  .selected-book .chip-meta {
+    font-size: 11px;
+    color: var(--ink-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Upload zone */
+  .upload-zone {
+    border: 1px dashed var(--line);
+    background: var(--paper);
+    padding: 32px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-height: 180px;
+    position: relative;
+  }
+  .upload-zone:hover {
+    border-color: var(--ink);
+    background: white;
+  }
+  .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(139,47,31,0.04);
+  }
+  .upload-zone input[type=file] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .upload-label {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+  .upload-hint {
+    font-size: 11px;
+    color: var(--ink-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .upload-zone.has-file {
+    border-style: solid;
+    border-color: var(--ok);
+    background: white;
+  }
+  .upload-preview {
+    max-width: 100%;
+    max-height: 120px;
+    margin-bottom: 8px;
+    object-fit: contain;
+  }
+  .upload-filename {
+    font-size: 11px;
+    color: var(--ok);
+    word-break: break-all;
+    font-family: 'JetBrains Mono', monospace;
+    margin-top: 4px;
+  }
+  .upload-clear {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+  }
+  .upload-zone.has-file .upload-clear { display: flex; }
+
+  /* Splitter UI */
+  .splitter {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .splitter-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .splitter-title {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .splitter-title > span:first-child {
+    font-family: 'Fraunces', serif;
+    font-size: 16px;
+    font-weight: 500;
+  }
+  .splitter-sub {
+    font-size: 11px;
+    color: var(--ink-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .btn-mini {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    background: var(--paper);
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-mini:hover {
+    border-color: var(--ink);
+    color: var(--ink);
+    background: white;
+  }
+
+  .canvas-wrap {
+    position: relative;
+    width: 100%;
+    background: repeating-conic-gradient(#f3efe6 0% 25%, #e8e3d6 0% 50%) 50% / 16px 16px;
+    border: 1px solid var(--line);
+    overflow: hidden;
+    user-select: none;
+  }
+  #splitCanvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    pointer-events: none;
+  }
+  .region {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    pointer-events: none;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 8px;
+  }
+  .region span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: white;
+    padding: 4px 8px;
+  }
+  .region-back { background: rgba(45,90,61,0.12); }
+  .region-spine { background: rgba(139,47,31,0.18); }
+  .region-front { background: rgba(184,134,11,0.12); }
+  .region-back span { background: var(--ok); }
+  .region-spine span { background: var(--accent); }
+  .region-front span { background: var(--warn); }
+
+  .divider {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--ink);
+    cursor: ew-resize;
+    z-index: 5;
+    pointer-events: auto;
+  }
+  .divider::before {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    left: -10px; right: -10px;
+  }
+  .divider-grip {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 16px;
+    height: 40px;
+    background: var(--ink);
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .divider-grip::before, .divider-grip::after {
+    content: '';
+    width: 1px;
+    height: 16px;
+    background: rgba(255,255,255,0.5);
+    margin: 0 1.5px;
+  }
+  .divider:hover, .divider.dragging { background: var(--accent); }
+  .divider:hover .divider-grip, .divider.dragging .divider-grip { background: var(--accent); }
+
+  .slider-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .slider-cell { display: flex; flex-direction: column; gap: 8px; }
+  .slider-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-soft);
+  }
+  .slider-val { color: var(--accent); font-weight: 500; }
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    background: var(--line);
+    outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px; height: 18px;
+    background: var(--ink);
+    cursor: pointer;
+    border-radius: 0;
+    border: 2px solid var(--paper);
+    box-shadow: 0 0 0 1px var(--ink);
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 18px; height: 18px;
+    background: var(--ink);
+    cursor: pointer;
+    border-radius: 0;
+    border: 2px solid var(--paper);
+    box-shadow: 0 0 0 1px var(--ink);
+  }
+
+  .preview-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .preview-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-align: center;
+  }
+  .preview-label {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-soft);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .preview-canvas {
+    width: 100%;
+    height: 110px;
+    object-fit: contain;
+    background: var(--paper);
+    border: 1px solid var(--line-soft);
+  }
+  .preview-spine { background: var(--paper-2); }
+  .preview-meta {
+    font-size: 10px;
+    color: var(--ink-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Summary panel (export view) */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .summary-block { display: flex; flex-direction: column; gap: 10px; }
+  .summary-block h4 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .summary-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .summary-list li {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    padding: 8px 0;
+    border-bottom: 1px dotted var(--line-soft);
+  }
+  .summary-list li:last-child { border-bottom: none; }
+  .summary-list .key {
+    color: var(--ink-muted);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.04em;
+    font-size: 11px;
+  }
+  .summary-list .val { color: var(--ink); font-weight: 500; max-width: 60%; text-align: right; word-break: break-all; }
+  .summary-list .val.empty { color: var(--ink-muted); font-style: italic; font-weight: 400; }
+  .summary-list .val.ok { color: var(--ok); }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 20px;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: white;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .btn:hover:not(:disabled) {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .btn:disabled {
+    background: var(--ink-muted);
+    border-color: var(--ink-muted);
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+  .btn.secondary {
+    background: white;
+    color: var(--ink);
+  }
+  .btn.secondary:hover:not(:disabled) {
+    background: var(--paper-2);
+    color: var(--ink);
+    border-color: var(--ink);
+  }
+  .btn-mono { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .btn-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+  .btn-row .btn { flex: 1; min-width: 180px; }
+
+  /* History table */
+  .table-wrap {
+    background: white;
+    border: 1px solid var(--line);
+    overflow: hidden;
+  }
+  table.history {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  table.history th {
+    background: var(--paper-2);
+    padding: 12px 16px;
+    text-align: left;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--line);
+    font-weight: 500;
+  }
+  table.history td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line-soft);
+    color: var(--ink);
+    vertical-align: middle;
+  }
+  table.history tr:last-child td { border-bottom: none; }
+  table.history tr:hover td { background: var(--paper); }
+  table.history .col-title { font-weight: 500; }
+  table.history .col-isbn { font-family: 'JetBrains Mono', monospace; color: var(--ink-soft); font-size: 11px; }
+  table.history .col-date { font-family: 'JetBrains Mono', monospace; color: var(--ink-muted); font-size: 11px; }
+  table.history .col-actions { text-align: right; }
+  .row-btn {
+    background: none;
+    border: 1px solid var(--line);
+    padding: 4px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    color: var(--ink-soft);
+    margin-left: 6px;
+  }
+  .row-btn:hover { border-color: var(--ink); color: var(--ink); }
+  .row-btn.danger:hover { border-color: var(--accent); color: var(--accent); }
+
+  .empty-state {
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--ink-muted);
+    background: white;
+    border: 1px solid var(--line);
+  }
+  .empty-state .icon {
+    font-family: 'Fraunces', serif;
+    font-size: 48px;
+    color: var(--line);
+    margin-bottom: 12px;
+    font-style: italic;
+  }
+
+  /* Tag */
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: var(--paper-2);
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+  }
+  .tag.초 { background: rgba(45,90,61,0.08); color: var(--ok); border-color: rgba(45,90,61,0.3); }
+  .tag.중 { background: rgba(139,47,31,0.08); color: var(--accent); border-color: rgba(139,47,31,0.3); }
+  .tag.고 { background: rgba(184,134,11,0.08); color: var(--warn); border-color: rgba(184,134,11,0.3); }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--ink);
+    color: white;
+    padding: 14px 24px;
+    font-size: 13px;
+    box-shadow: var(--shadow);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 100;
+    border-left: 3px solid var(--accent);
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.ok { border-left-color: var(--ok); }
+  .toast.warn { border-left-color: var(--warn); }
+
+  .loading-bar {
+    height: 2px;
+    background: var(--line-soft);
+    overflow: hidden;
+    margin-top: 12px;
+    display: none;
+  }
+  .loading-bar.active { display: block; }
+  .loading-bar::after {
+    content: '';
+    display: block;
+    height: 100%;
+    width: 30%;
+    background: var(--accent);
+    animation: slide 1.2s ease-in-out infinite;
+  }
+  @keyframes slide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(400%); }
+  }
+
+  @media (max-width: 1024px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { position: relative; height: auto; }
+    .main { padding: 32px 24px 60px; }
+    .field-grid, .summary-grid, .cascade { grid-template-columns: 1fr; }
+    .slider-row, .preview-row { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ====== SIDEBAR ====== -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="kicker">VISANG · AIDT OPS</span>
+      <h1>서지 등록 <em>자동화</em></h1>
+    </div>
+
+    <div class="nav-section-title">Workflow</div>
+    <ul class="nav" id="nav">
+      <li class="nav-item active" data-view="meta">
+        <span class="nav-num">01</span>
+        <span class="nav-label">서지정보 등록</span>
+        <span class="nav-badge"></span>
+      </li>
+      <li class="nav-item" data-view="cover">
+        <span class="nav-num">02</span>
+        <span class="nav-label">표지 이미지 등록</span>
+        <span class="nav-badge"></span>
+      </li>
+      <li class="nav-item" data-view="detail">
+        <span class="nav-num">03</span>
+        <span class="nav-label">상세 이미지 등록</span>
+        <span class="nav-badge"></span>
+      </li>
+      <li class="nav-item" data-view="export">
+        <span class="nav-num">04</span>
+        <span class="nav-label">패키지·메일 발송</span>
+        <span class="nav-badge"></span>
+      </li>
+      <li class="nav-item" data-view="history">
+        <span class="nav-num">05</span>
+        <span class="nav-label">등록 내역 조회</span>
+      </li>
+    </ul>
+
+    <div class="sidebar-foot">
+      <div class="ver">FORM v2.0</div>
+      <div id="sidebarDate"></div>
+      <div>비상교육 플랫폼마케팅</div>
+    </div>
+  </aside>
+
+  <!-- ====== MAIN ====== -->
+  <main class="main">
+    <div class="main-inner">
+
+      <!-- ===== 1. 서지정보 ===== -->
+      <section class="view active" id="view-meta">
+        <div class="page-head">
+          <div class="page-title">
+            <span class="crumb">STEP 01 · METADATA</span>
+            <h2>서지정보 <em>등록</em></h2>
+          </div>
+          <p class="page-desc">교재 소개 등록 요청서의 모든 항목을 입력합니다.<br>최종 다운로드 시 워드(.docx) 파일로 자동 생성됩니다.</p>
+        </div>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h3>기본 정보</h3>
+            <span class="panel-num">BIBLIOGRAPHIC</span>
+          </div>
+          <div class="panel-body">
+            <div class="field-grid">
+              <div class="field">
+                <label>교재명 (브랜드명) <span class="req">*</span></label>
+                <input type="text" id="f_title" placeholder="예: Grammar In 1A (26)">
+              </div>
+              <div class="field">
+                <label>ISBN <span class="req">*</span></label>
+                <input type="text" id="f_isbn" placeholder="979-11-7590-089-9">
+              </div>
+              <div class="field">
+                <label>교재 구분 <span class="req">*</span></label>
+                <select id="f_division">
+                  <option value="">선택</option>
+                  <option value="초">초등</option>
+                  <option value="중">중등</option>
+                  <option value="고">고등</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>과목 <span class="req">*</span></label>
+                <select id="f_subject">
+                  <option value="">교재 구분 먼저 선택</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>학년</label>
+                <input type="text" id="f_grade" placeholder="중등 1">
+              </div>
+              <div class="field">
+                <label>학기</label>
+                <input type="text" id="f_semester" placeholder="1, 2학기">
+              </div>
+              <div class="field">
+                <label>난이도</label>
+                <select id="f_level">
+                  <option value="">선택</option>
+                  <option>쉬움</option>
+                  <option>보통</option>
+                  <option>어려움</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>판형</label>
+                <input type="text" id="f_format" placeholder="215x290mm">
+              </div>
+              <div class="field full">
+                <label>개발</label>
+                <input type="text" id="f_dev" placeholder="장지선, 박진영, 강초롱, 이현정, 김은정">
+              </div>
+              <div class="field">
+                <label>저자</label>
+                <input type="text" id="f_author" placeholder="비상중등영어콘텐츠 개발팀">
+              </div>
+              <div class="field">
+                <label>검토</label>
+                <input type="text" id="f_review" placeholder="Robin Klinkner">
+              </div>
+              <div class="field full">
+                <label>쪽수</label>
+                <input type="text" id="f_pages" placeholder="본책(168쪽), 정답과 해설(64쪽), 단어장(40쪽)">
+              </div>
+              <div class="field">
+                <label>정가</label>
+                <input type="text" id="f_price" placeholder="14,000 원">
+              </div>
+              <div class="field">
+                <label>펴낸날</label>
+                <input type="text" id="f_pubdate" placeholder="2026년 1월 1일">
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h3>구성 · 학습 정보</h3>
+            <span class="panel-num">CONTENT</span>
+          </div>
+          <div class="panel-body">
+            <div class="field-grid">
+              <div class="field full">
+                <label>목차</label>
+                <textarea id="f_toc" rows="5" placeholder="CHAPTER 1 인칭대명사와 be동사 Unit 01 ..."></textarea>
+              </div>
+              <div class="field">
+                <label>학습 대상 (학년)</label>
+                <input type="text" id="f_target" placeholder="중학 1, 중학 2, 중학 3">
+              </div>
+              <div class="field">
+                <label>학습 연도</label>
+                <input type="text" id="f_year" placeholder="2026년">
+              </div>
+              <div class="field">
+                <label>개정 (교육과정) 연도</label>
+                <input type="text" id="f_curriculum" placeholder="2022 개정">
+              </div>
+              <div class="field">
+                <label>빠른 정답 유무</label>
+                <select id="f_quickans">
+                  <option value="">선택</option>
+                  <option>있음</option>
+                  <option>없음</option>
+                </select>
+              </div>
+              <div class="field full">
+                <label>교재 미리보기 (e-book) 구성</label>
+                <textarea id="f_preview" rows="3" placeholder="Book Overview 2-3 / 목차 4-5 ..."></textarea>
+              </div>
+              <div class="field full">
+                <label>책 소개 (교재 소개 및 특장점)</label>
+                <textarea id="f_intro" rows="6"></textarea>
+              </div>
+              <div class="field full">
+                <label>출판사 리뷰 (서평)</label>
+                <textarea id="f_review_text" rows="3"></textarea>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <!-- ===== 2. 표지 이미지 ===== -->
+      <section class="view" id="view-cover">
+        <div class="page-head">
+          <div class="page-title">
+            <span class="crumb">STEP 02 · COVER ASSETS</span>
+            <h2>표지 이미지 <em>등록</em></h2>
+          </div>
+          <p class="page-desc">교재를 선택하고 펼침면 1장을 업로드하면<br>앞표지·뒷표지·세네카·전체 4종이 자동 생성됩니다.</p>
+        </div>
+
+        <!-- Cascade -->
+        <section class="panel">
+          <div class="panel-head">
+            <h3>교재 선택</h3>
+            <span class="panel-num">SELECT BOOK</span>
+          </div>
+          <div class="panel-body">
+            <div class="cascade">
+              <div class="field">
+                <label>교재 구분</label>
+                <select id="c_division">
+                  <option value="">선택</option>
+                  <option value="초">초등</option>
+                  <option value="중">중등</option>
+                  <option value="고">고등</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>과목</label>
+                <select id="c_subject" disabled>
+                  <option value="">교재 구분 먼저</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>교재명</label>
+                <select id="c_book" disabled>
+                  <option value="">과목 먼저</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="selected-book empty" id="selectedBook">
+              <span class="chip-label">선택된 교재</span>
+              <span class="chip-title">교재를 선택해주세요</span>
+              <span class="chip-meta"></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Spread upload + splitter -->
+        <section class="panel">
+          <div class="panel-head">
+            <h3>펼침면 업로드 · 자동 분할</h3>
+            <span class="panel-num">AUTO SPLIT</span>
+          </div>
+          <div class="panel-body">
+
+            <label class="upload-zone" id="spreadUpload">
+              <input type="file" accept="image/*" id="spreadInput">
+              <div class="upload-default">
+                <div class="upload-label">전체 펼침면 이미지 업로드</div>
+                <div class="upload-hint">뒷표지 ─ 세네카 ─ 앞표지 순서의 펼침면 1장</div>
+              </div>
+            </label>
+
+            <div class="splitter" id="splitter" hidden>
+              <div class="splitter-head">
+                <div class="splitter-title">
+                  <span>분할 지점 조정</span>
+                  <span class="splitter-sub">원본 화질 그대로 잘립니다 · 슬라이더 또는 캔버스 위 손잡이로 조정</span>
+                </div>
+                <button type="button" class="btn-mini" id="resetSpread">× 다시 업로드</button>
+              </div>
+
+              <div class="canvas-wrap">
+                <canvas id="splitCanvas"></canvas>
+                <div class="region region-back" id="rBack"><span>뒷표지</span></div>
+                <div class="region region-spine" id="rSpine"><span>세네카</span></div>
+                <div class="region region-front" id="rFront"><span>앞표지</span></div>
+                <div class="divider divider-1" id="div1"><div class="divider-grip"></div></div>
+                <div class="divider divider-2" id="div2"><div class="divider-grip"></div></div>
+              </div>
+
+              <div class="slider-row">
+                <div class="slider-cell">
+                  <div class="slider-label">
+                    <span>뒷표지 ─ 세네카 경계</span>
+                    <span class="slider-val" id="val1">45%</span>
+                  </div>
+                  <input type="range" id="slider1" min="0" max="1000" value="450">
+                </div>
+                <div class="slider-cell">
+                  <div class="slider-label">
+                    <span>세네카 ─ 앞표지 경계</span>
+                    <span class="slider-val" id="val2">55%</span>
+                  </div>
+                  <input type="range" id="slider2" min="0" max="1000" value="550">
+                </div>
+              </div>
+
+              <div class="preview-row">
+                <div class="preview-cell">
+                  <div class="preview-label">앞표지</div>
+                  <canvas class="preview-canvas" id="preview_front"></canvas>
+                  <div class="preview-meta" id="meta_front">—</div>
+                </div>
+                <div class="preview-cell">
+                  <div class="preview-label">뒷표지</div>
+                  <canvas class="preview-canvas" id="preview_back"></canvas>
+                  <div class="preview-meta" id="meta_back">—</div>
+                </div>
+                <div class="preview-cell">
+                  <div class="preview-label">세네카</div>
+                  <canvas class="preview-canvas preview-spine" id="preview_spine"></canvas>
+                  <div class="preview-meta" id="meta_spine">—</div>
+                </div>
+                <div class="preview-cell">
+                  <div class="preview-label">전체</div>
+                  <canvas class="preview-canvas" id="preview_full"></canvas>
+                  <div class="preview-meta" id="meta_full">—</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+      </section>
+
+      <!-- ===== 3. 상세 이미지 ===== -->
+      <section class="view" id="view-detail">
+        <div class="page-head">
+          <div class="page-title">
+            <span class="crumb">STEP 03 · DETAIL IMAGE</span>
+            <h2>상세 이미지 <em>등록</em></h2>
+          </div>
+          <p class="page-desc">온라인 서점 상세페이지에 노출되는<br>세로 긴 상세 이미지 1장을 업로드합니다.</p>
+        </div>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h3>상세 이미지 업로드</h3>
+            <span class="panel-num">DETAIL</span>
+          </div>
+          <div class="panel-body">
+            <label class="upload-zone" id="detailUpload" style="min-height: 240px;">
+              <button type="button" class="upload-clear" id="detailClear">×</button>
+              <input type="file" accept="image/*" id="detailInput">
+              <div class="upload-default">
+                <div class="upload-label">교재 상세 이미지 업로드</div>
+                <div class="upload-hint">JPG · PNG · 세로 긴 상세페이지 이미지</div>
+              </div>
+            </label>
+          </div>
+        </section>
+      </section>
+
+      <!-- ===== 4. 패키지 다운로드 ===== -->
+      <section class="view" id="view-export">
+        <div class="page-head">
+          <div class="page-title">
+            <span class="crumb">STEP 04 · EXPORT</span>
+            <h2>패키지 다운로드 <em>· 메일 발송</em></h2>
+          </div>
+          <p class="page-desc">입력된 모든 정보와 이미지를 ZIP으로 패키징하여<br>다운로드하거나 서점 담당자에게 메일을 발송합니다.</p>
+        </div>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h3>등록 정보 요약</h3>
+            <span class="panel-num">REVIEW</span>
+          </div>
+          <div class="panel-body">
+            <div class="summary-grid">
+              <div class="summary-block">
+                <h4>서지정보</h4>
+                <ul class="summary-list">
+                  <li><span class="key">교재명</span><span class="val empty" id="s_title">—</span></li>
+                  <li><span class="key">ISBN</span><span class="val empty" id="s_isbn">—</span></li>
+                  <li><span class="key">구분/과목</span><span class="val empty" id="s_division">—</span></li>
+                  <li><span class="key">정가</span><span class="val empty" id="s_price">—</span></li>
+                  <li><span class="key">발행일</span><span class="val empty" id="s_pubdate">—</span></li>
+                </ul>
+              </div>
+              <div class="summary-block">
+                <h4>이미지 자산</h4>
+                <ul class="summary-list">
+                  <li><span class="key">앞표지</span><span class="val empty" id="s_front">미등록</span></li>
+                  <li><span class="key">뒷표지</span><span class="val empty" id="s_back">미등록</span></li>
+                  <li><span class="key">세네카</span><span class="val empty" id="s_spine">미등록</span></li>
+                  <li><span class="key">전체 이미지</span><span class="val empty" id="s_full">미등록</span></li>
+                  <li><span class="key">상세 이미지</span><span class="val empty" id="s_detail">미등록</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h3>발송 옵션</h3>
+            <span class="panel-num">SEND</span>
+          </div>
+          <div class="panel-body">
+            <div class="field full">
+              <label>수신자 이메일 (서점 담당자)</label>
+              <input type="email" id="f_email" placeholder="contact@bookstore.com">
+            </div>
+            <div class="btn-row">
+              <button class="btn" id="btn_download">패키지 다운로드 (.ZIP)</button>
+              <button class="btn secondary" id="btn_mail">메일 발송 (메일 앱 열기)</button>
+              <button class="btn secondary btn-mono" id="btn_reset">전체 초기화</button>
+            </div>
+            <div class="loading-bar" id="loadingBar"></div>
+            <p style="margin-top:12px; font-size:11px; color:var(--ink-muted); font-family:'JetBrains Mono', monospace;">
+              ※ 메일 발송 시 ZIP이 먼저 다운로드되고 메일 앱이 열립니다. 다운로드된 파일을 첨부해주세요.
+            </p>
+          </div>
+        </section>
+      </section>
+
+      <!-- ===== 5. 등록 내역 ===== -->
+      <section class="view" id="view-history">
+        <div class="page-head">
+          <div class="page-title">
+            <span class="crumb">STEP 05 · HISTORY</span>
+            <h2>등록 <em>내역 조회</em></h2>
+          </div>
+          <p class="page-desc">패키지 다운로드 또는 메일 발송이 완료된<br>등록 이력 목록입니다.</p>
+        </div>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h3>등록 이력</h3>
+            <span class="panel-num">RECORDS · <span id="historyCount">0</span></span>
+          </div>
+          <div class="panel-body" style="padding: 0;">
+            <div id="historyContent">
+              <div class="empty-state">
+                <div class="icon">∅</div>
+                <div>등록 이력이 없습니다.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// Navigation — 최우선 등록 (외부 라이브러리 로딩 실패와 무관하게 동작)
+// ============================================================
+function setupNavigation() {
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const view = item.dataset.view;
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      item.classList.add('active');
+      const target = document.getElementById('view-' + view);
+      if (target) target.classList.add('active');
+      if (view === 'history' && typeof renderHistory === 'function') renderHistory();
+      if (view === 'export' && typeof updateSummary === 'function') updateSummary();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+}
+setupNavigation();
+
+// docx 라이브러리 로딩 (실패해도 메뉴는 동작)
+let Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle;
+try {
+  ({ Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle } = docx);
+} catch (e) {
+  console.warn('docx 라이브러리 로드 실패:', e);
+}
+
+document.getElementById('sidebarDate').textContent = new Date().toISOString().slice(0,10).replace(/-/g,'.');
+
+// ============================================================
+// 교재 마스터 데이터 (초/중/고 → 과목 → 교재명)
+// 실제 운영에서는 Google Sheets CSV로 교체 가능
+// ============================================================
+const BOOK_DATA = {
+  '초': {
+    '국어': ['완자 초등 국어 1-1', '완자 초등 국어 1-2', '완자 초등 국어 2-1', '완자 초등 국어 2-2'],
+    '수학': ['만점왕 수학 1-1', '만점왕 수학 1-2', '완자 초등 수학 3-1', '완자 초등 수학 3-2', '완자 초등 수학 4-1'],
+    '영어': ['Grammar Pop Starter A', 'Grammar Pop Starter B', '초등 영어 서책 1년 무료체험', '완자 초등 영어 5학년', '완자 초등 영어 6학년'],
+    '사회': ['만점왕 사회 3-1', '만점왕 사회 4-1', '만점왕 사회 5-1', '만점왕 사회 6-1'],
+    '과학': ['만점왕 과학 3-1', '만점왕 과학 4-1', '만점왕 과학 5-1', '만점왕 과학 6-1']
+  },
+  '중': {
+    '국어': ['오투 중등 국어 1-1', '오투 중등 국어 1-2', '오투 중등 국어 2-1', '한끝 중등 국어 1', '한끝 중등 국어 2'],
+    '수학': ['개념플러스유형 중1', '개념플러스유형 중2', '개념플러스유형 중3', '완자 중등 수학 1-1', '완자 중등 수학 2-1'],
+    '영어': ['Grammar In 1A (26)', 'Grammar In 1B (26)', 'Grammar In 2A (26)', 'Grammar In 2B (26)', '오투 중등 영어 1', '오투 중등 영어 2'],
+    '사회': ['오투 중등 사회 1', '오투 중등 사회 2', '한끝 중등 사회 1'],
+    '과학': ['오투 중등 과학 1', '오투 중등 과학 2', '오투 중등 과학 3', '한끝 중등 과학 1'],
+    '역사': ['오투 중등 역사 1', '오투 중등 역사 2']
+  },
+  '고': {
+    '국어': ['수능특강 국어', '완자 고등 국어 (상)', '완자 고등 국어 (하)', '완자 문학', '완자 독서'],
+    '수학': ['수능특강 수학Ⅰ', '수능특강 수학Ⅱ', '완자 수학 (상)', '완자 수학 (하)', '완자 수학Ⅰ', '완자 수학Ⅱ', '완자 미적분'],
+    '영어': ['수능특강 영어', '수능특강 영어독해연습', '완자 고등 영어', 'Grammar Pop 고1'],
+    '사회': ['완자 통합사회', '완자 한국사', '완자 경제'],
+    '과학': ['완자 통합과학', '완자 물리학Ⅰ', '완자 화학Ⅰ', '완자 생명과학Ⅰ', '완자 지구과학Ⅰ']
+  }
+};
+
+// 필드 정의
+const FIELDS = [
+  ['f_title', '교재명(브랜드명)'],
+  ['f_grade', '학년'],
+  ['f_semester', '학기'],
+  ['f_level', '난이도'],
+  ['f_isbn', 'ISBN'],
+  ['f_dev', '개발'],
+  ['f_author', '저자'],
+  ['f_review', '검토'],
+  ['f_pages', '쪽수'],
+  ['f_format', '판형'],
+  ['f_price', '정가'],
+  ['f_pubdate', '펴낸날(발행일X)'],
+  ['f_toc', '목차'],
+  ['f_target', '학습 대상(학년)'],
+  ['f_year', '학습 연도'],
+  ['f_curriculum', '개정 (교육과정) 연도'],
+  ['f_quickans', '빠른 정답(스피드 정답체크) 유무'],
+  ['f_preview', '교재 미리보기 (e-book)'],
+  ['f_intro', '책 소개 (교재 소개 및 특장점)'],
+  ['f_review_text', '출판사 리뷰(서평)']
+];
+
+// State
+const images = { front: null, back: null, spine: null, full: null, detail: null };
+const selectedBook = { division: '', subject: '', book: '' };
+
+// ============================================================
+// Toast
+// ============================================================
+function toast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ============================================================
+// Cascade: 서지정보 입력 폼의 구분/과목 선택
+// ============================================================
+function populateSubjects(divisionEl, subjectEl, division) {
+  subjectEl.innerHTML = '<option value="">선택</option>';
+  if (!division || !BOOK_DATA[division]) {
+    subjectEl.disabled = true;
+    return;
+  }
+  Object.keys(BOOK_DATA[division]).forEach(subj => {
+    const opt = document.createElement('option');
+    opt.value = subj;
+    opt.textContent = subj;
+    subjectEl.appendChild(opt);
+  });
+  subjectEl.disabled = false;
+}
+
+function populateBooks(bookEl, division, subject) {
+  bookEl.innerHTML = '<option value="">선택</option>';
+  if (!division || !subject || !BOOK_DATA[division]?.[subject]) {
+    bookEl.disabled = true;
+    return;
+  }
+  BOOK_DATA[division][subject].forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b;
+    opt.textContent = b;
+    bookEl.appendChild(opt);
+  });
+  bookEl.disabled = false;
+}
+
+// 서지정보 입력 폼의 구분/과목
+document.getElementById('f_division').addEventListener('change', (e) => {
+  populateSubjects(null, document.getElementById('f_subject'), e.target.value);
+  updateNavBadges();
+});
+document.getElementById('f_subject').addEventListener('change', updateNavBadges);
+
+// 표지 등록 메뉴의 교재 선택 캐스케이드
+document.getElementById('c_division').addEventListener('change', (e) => {
+  selectedBook.division = e.target.value;
+  selectedBook.subject = '';
+  selectedBook.book = '';
+  populateSubjects(null, document.getElementById('c_subject'), e.target.value);
+  document.getElementById('c_book').innerHTML = '<option value="">과목 먼저</option>';
+  document.getElementById('c_book').disabled = true;
+  updateSelectedBookChip();
+});
+document.getElementById('c_subject').addEventListener('change', (e) => {
+  selectedBook.subject = e.target.value;
+  selectedBook.book = '';
+  populateBooks(document.getElementById('c_book'), selectedBook.division, e.target.value);
+  updateSelectedBookChip();
+});
+document.getElementById('c_book').addEventListener('change', (e) => {
+  selectedBook.book = e.target.value;
+  updateSelectedBookChip();
+
+  // 선택된 교재명을 서지정보 폼에도 자동 채움 (비어있을 때만)
+  if (selectedBook.book && !document.getElementById('f_title').value) {
+    document.getElementById('f_title').value = selectedBook.book;
+  }
+  // 구분/과목도 자동 채움 (비어있을 때만)
+  if (selectedBook.division && !document.getElementById('f_division').value) {
+    document.getElementById('f_division').value = selectedBook.division;
+    populateSubjects(null, document.getElementById('f_subject'), selectedBook.division);
+  }
+  if (selectedBook.subject && !document.getElementById('f_subject').value) {
+    document.getElementById('f_subject').value = selectedBook.subject;
+  }
+  updateNavBadges();
+});
+
+function updateSelectedBookChip() {
+  const chip = document.getElementById('selectedBook');
+  const title = chip.querySelector('.chip-title');
+  const meta = chip.querySelector('.chip-meta');
+  if (selectedBook.book) {
+    chip.classList.remove('empty');
+    title.textContent = selectedBook.book;
+    meta.innerHTML = `<span class="tag ${selectedBook.division}">${selectedBook.division === '초' ? '초등' : selectedBook.division === '중' ? '중등' : '고등'}</span> · ${selectedBook.subject}`;
+  } else {
+    chip.classList.add('empty');
+    title.textContent = '교재를 선택해주세요';
+    meta.textContent = '';
+  }
+}
+
+// ============================================================
+// Nav badges (각 단계 완료 표시)
+// ============================================================
+function updateNavBadges() {
+  const filledMeta = ['f_title', 'f_isbn'].every(id => document.getElementById(id).value.trim()) && document.getElementById('f_division').value;
+  const filledCovers = ['front','back','spine','full'].every(k => images[k]);
+  const filledDetail = !!images.detail;
+  const ready = filledMeta && filledCovers && filledDetail;
+
+  document.querySelector('[data-view=meta]').classList.toggle('completed', filledMeta);
+  document.querySelector('[data-view=cover]').classList.toggle('completed', filledCovers);
+  document.querySelector('[data-view=detail]').classList.toggle('completed', filledDetail);
+  document.querySelector('[data-view=export]').classList.toggle('completed', ready);
+}
+
+// 모든 필드에 리스너 부착
+FIELDS.forEach(([id]) => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('input', updateNavBadges);
+    el.addEventListener('change', updateNavBadges);
+  }
+});
+
+// ============================================================
+// Summary update (export view)
+// ============================================================
+function setSummary(id, val, isOk = false) {
+  const el = document.getElementById(id);
+  el.textContent = val || '—';
+  el.classList.toggle('empty', !val || val === '—' || val === '미등록');
+  el.classList.toggle('ok', isOk);
+}
+
+function updateSummary() {
+  setSummary('s_title', document.getElementById('f_title').value);
+  setSummary('s_isbn', document.getElementById('f_isbn').value);
+  const div = document.getElementById('f_division').value;
+  const subj = document.getElementById('f_subject').value;
+  const divLabel = div === '초' ? '초등' : div === '중' ? '중등' : div === '고' ? '고등' : '';
+  setSummary('s_division', divLabel && subj ? `${divLabel} · ${subj}` : divLabel || subj);
+  setSummary('s_price', document.getElementById('f_price').value);
+  setSummary('s_pubdate', document.getElementById('f_pubdate').value);
+  ['front','back','spine','full','detail'].forEach(k => {
+    setSummary('s_' + k, images[k] ? '등록됨' : '미등록', !!images[k]);
+  });
+}
+
+// ============================================================
+// Detail image upload
+// ============================================================
+const detailInput = document.getElementById('detailInput');
+const detailUpload = document.getElementById('detailUpload');
+const detailClear = document.getElementById('detailClear');
+
+detailInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  images.detail = file;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    detailUpload.classList.add('has-file');
+    detailUpload.querySelector('.upload-default').innerHTML = `
+      <img class="upload-preview" src="${ev.target.result}" alt="">
+      <div class="upload-label">상세 이미지</div>
+      <div class="upload-filename">${file.name}</div>
+    `;
+    updateNavBadges();
+  };
+  reader.readAsDataURL(file);
+});
+
+detailUpload.addEventListener('dragover', (e) => { e.preventDefault(); detailUpload.classList.add('drag-over'); });
+detailUpload.addEventListener('dragleave', () => detailUpload.classList.remove('drag-over'));
+detailUpload.addEventListener('drop', (e) => {
+  e.preventDefault();
+  detailUpload.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) {
+    detailInput.files = e.dataTransfer.files;
+    detailInput.dispatchEvent(new Event('change'));
+  }
+});
+
+detailClear.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  images.detail = null;
+  detailInput.value = '';
+  detailUpload.classList.remove('has-file');
+  detailUpload.querySelector('.upload-default').innerHTML = `
+    <div class="upload-label">교재 상세 이미지 업로드</div>
+    <div class="upload-hint">JPG · PNG · 세로 긴 상세페이지 이미지</div>
+  `;
+  updateNavBadges();
+});
+
+// ============================================================
+// Cover Auto-Split (펼침면 → 4종 자동 생성)
+// ============================================================
+const coverState = {
+  sourceImage: null,
+  sourceFormat: 'image/jpeg',
+  sourceExt: 'jpg',
+  div1Ratio: 0.45,
+  div2Ratio: 0.55,
+};
+
+const spreadInput = document.getElementById('spreadInput');
+const spreadUpload = document.getElementById('spreadUpload');
+const splitter = document.getElementById('splitter');
+const splitCanvas = document.getElementById('splitCanvas');
+const canvasWrap = splitCanvas.parentElement;
+const slider1 = document.getElementById('slider1');
+const slider2 = document.getElementById('slider2');
+const val1 = document.getElementById('val1');
+const val2 = document.getElementById('val2');
+const div1 = document.getElementById('div1');
+const div2 = document.getElementById('div2');
+const rBack = document.getElementById('rBack');
+const rSpine = document.getElementById('rSpine');
+const rFront = document.getElementById('rFront');
+
+spreadInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!selectedBook.book) {
+    toast('먼저 교재를 선택해주세요', 'warn');
+    spreadInput.value = '';
+    return;
+  }
+  loadSpread(file);
+});
+
+spreadUpload.addEventListener('dragover', (e) => { e.preventDefault(); spreadUpload.classList.add('drag-over'); });
+spreadUpload.addEventListener('dragleave', () => spreadUpload.classList.remove('drag-over'));
+spreadUpload.addEventListener('drop', (e) => {
+  e.preventDefault();
+  spreadUpload.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) {
+    if (!selectedBook.book) { toast('먼저 교재를 선택해주세요', 'warn'); return; }
+    spreadInput.files = e.dataTransfer.files;
+    spreadInput.dispatchEvent(new Event('change'));
+  }
+});
+
+function loadSpread(file) {
+  if (file.type === 'image/png') {
+    coverState.sourceFormat = 'image/png';
+    coverState.sourceExt = 'png';
+  } else if (file.type === 'image/webp') {
+    coverState.sourceFormat = 'image/webp';
+    coverState.sourceExt = 'webp';
+  } else {
+    coverState.sourceFormat = 'image/jpeg';
+    coverState.sourceExt = file.name.split('.').pop().toLowerCase() === 'png' ? 'png' : 'jpg';
+  }
+
+  const img = new Image();
+  img.onload = () => {
+    coverState.sourceImage = img;
+    const maxDisplayWidth = 1100;
+    const ratio = Math.min(1, maxDisplayWidth / img.naturalWidth);
+    splitCanvas.width = img.naturalWidth * ratio;
+    splitCanvas.height = img.naturalHeight * ratio;
+    const ctx = splitCanvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, splitCanvas.width, splitCanvas.height);
+
+    coverState.div1Ratio = 0.45;
+    coverState.div2Ratio = 0.55;
+    slider1.value = 450;
+    slider2.value = 550;
+
+    spreadUpload.hidden = true;
+    splitter.hidden = false;
+
+    updateSplitUI();
+    generateAllCovers();
+  };
+  img.onerror = () => toast('이미지를 불러올 수 없습니다', 'warn');
+  img.src = URL.createObjectURL(file);
+}
+
+slider1.addEventListener('input', () => {
+  let v1 = parseInt(slider1.value);
+  let v2 = parseInt(slider2.value);
+  if (v1 >= v2 - 10) { v1 = v2 - 10; slider1.value = v1; }
+  coverState.div1Ratio = v1 / 1000;
+  updateSplitUI();
+  scheduleRegenerate();
+});
+slider2.addEventListener('input', () => {
+  let v1 = parseInt(slider1.value);
+  let v2 = parseInt(slider2.value);
+  if (v2 <= v1 + 10) { v2 = v1 + 10; slider2.value = v2; }
+  coverState.div2Ratio = v2 / 1000;
+  updateSplitUI();
+  scheduleRegenerate();
+});
+
+function setupDividerDrag(divEl, isFirst) {
+  let dragging = false;
+  const onDown = (e) => { dragging = true; divEl.classList.add('dragging'); e.preventDefault(); };
+  const onMove = (e) => {
+    if (!dragging) return;
+    const rect = canvasWrap.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    let ratio = (clientX - rect.left) / rect.width;
+    ratio = Math.max(0, Math.min(1, ratio));
+    if (isFirst) {
+      if (ratio >= coverState.div2Ratio - 0.01) ratio = coverState.div2Ratio - 0.01;
+      coverState.div1Ratio = ratio;
+      slider1.value = Math.round(ratio * 1000);
+    } else {
+      if (ratio <= coverState.div1Ratio + 0.01) ratio = coverState.div1Ratio + 0.01;
+      coverState.div2Ratio = ratio;
+      slider2.value = Math.round(ratio * 1000);
+    }
+    updateSplitUI();
+    scheduleRegenerate();
+  };
+  const onUp = () => { if (dragging) { dragging = false; divEl.classList.remove('dragging'); } };
+  divEl.addEventListener('mousedown', onDown);
+  divEl.addEventListener('touchstart', onDown, { passive: false });
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('mouseup', onUp);
+  document.addEventListener('touchend', onUp);
+}
+setupDividerDrag(div1, true);
+setupDividerDrag(div2, false);
+
+function updateSplitUI() {
+  const r1 = coverState.div1Ratio;
+  const r2 = coverState.div2Ratio;
+  div1.style.left = `calc(${r1 * 100}% - 1px)`;
+  div2.style.left = `calc(${r2 * 100}% - 1px)`;
+  rBack.style.left = '0%';
+  rBack.style.width = `${r1 * 100}%`;
+  rSpine.style.left = `${r1 * 100}%`;
+  rSpine.style.width = `${(r2 - r1) * 100}%`;
+  rFront.style.left = `${r2 * 100}%`;
+  rFront.style.width = `${(1 - r2) * 100}%`;
+
+  if (coverState.sourceImage) {
+    const w = coverState.sourceImage.naturalWidth;
+    val1.textContent = `${Math.round(r1 * 100)}% · ${Math.round(r1 * w)}px`;
+    val2.textContent = `${Math.round(r2 * 100)}% · ${Math.round(r2 * w)}px`;
+  }
+}
+
+let regenerateTimer = null;
+function scheduleRegenerate() {
+  if (regenerateTimer) clearTimeout(regenerateTimer);
+  regenerateTimer = setTimeout(generateAllCovers, 80);
+}
+
+function generateAllCovers() {
+  if (!coverState.sourceImage) return;
+  const img = coverState.sourceImage;
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+  const x1 = Math.round(W * coverState.div1Ratio);
+  const x2 = Math.round(W * coverState.div2Ratio);
+
+  cropToBlob(img, 0, 0, W, H, 'full');
+  cropToBlob(img, 0, 0, x1, H, 'back');
+  cropToBlob(img, x1, 0, x2 - x1, H, 'spine');
+  cropToBlob(img, x2, 0, W - x2, H, 'front');
+}
+
+function cropToBlob(img, sx, sy, sw, sh, key) {
+  const canvas = document.createElement('canvas');
+  canvas.width = sw;
+  canvas.height = sh;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+  drawPreview(canvas, key, sw, sh);
+
+  const quality = coverState.sourceFormat === 'image/jpeg' ? 0.95 : undefined;
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const baseName = safeName(selectedBook.book || document.getElementById('f_title').value || 'cover');
+    const fileName = `${key}_${baseName}.${coverState.sourceExt}`;
+    images[key] = new File([blob], fileName, { type: coverState.sourceFormat });
+    updateNavBadges();
+  }, coverState.sourceFormat, quality);
+}
+
+function drawPreview(srcCanvas, key, w, h) {
+  const previewCanvas = document.getElementById('preview_' + key);
+  const meta = document.getElementById('meta_' + key);
+  if (!previewCanvas) return;
+  const maxW = previewCanvas.clientWidth || 200;
+  const maxH = 110;
+  const scale = Math.min(maxW / w, maxH / h);
+  previewCanvas.width = w * scale;
+  previewCanvas.height = h * scale;
+  const ctx = previewCanvas.getContext('2d');
+  ctx.drawImage(srcCanvas, 0, 0, previewCanvas.width, previewCanvas.height);
+  if (meta) meta.textContent = `${w} × ${h}`;
+}
+
+document.getElementById('resetSpread').addEventListener('click', () => {
+  if (!confirm('업로드된 펼침면을 제거하고 다시 업로드할까요?')) return;
+  coverState.sourceImage = null;
+  spreadInput.value = '';
+  spreadUpload.hidden = false;
+  splitter.hidden = true;
+  ['front', 'back', 'spine', 'full'].forEach(k => { images[k] = null; });
+  updateNavBadges();
+});
+
+// ============================================================
+// Utilities
+// ============================================================
+function safeName(s) {
+  return (s || 'untitled').replace(/[\\/:*?"<>|]+/g, '_').trim().slice(0, 80);
+}
+
+// ============================================================
+// DOCX build
+// ============================================================
+async function buildDocx() {
+  const data = {};
+  FIELDS.forEach(([id, label]) => { data[label] = document.getElementById(id).value || ''; });
+
+  const cellBorder = {
+    top: { style: BorderStyle.SINGLE, size: 4, color: '888888' },
+    bottom: { style: BorderStyle.SINGLE, size: 4, color: '888888' },
+    left: { style: BorderStyle.SINGLE, size: 4, color: '888888' },
+    right: { style: BorderStyle.SINGLE, size: 4, color: '888888' },
+  };
+  const mkCell = (text, opts = {}) => new TableCell({
+    children: [new Paragraph({
+      children: [new TextRun({ text: text || '', bold: opts.bold || false, size: 20, font: 'Pretendard' })],
+      alignment: AlignmentType.LEFT,
+    })],
+    width: { size: opts.width || 50, type: WidthType.PERCENTAGE },
+    shading: opts.bold ? { fill: 'F3EFE6' } : undefined,
+    borders: cellBorder,
+  });
+  const mkRow = (label, value) => new TableRow({
+    children: [mkCell(label, { bold: true, width: 25 }), mkCell(value, { width: 75 })]
+  });
+
+  const rows = FIELDS.map(([id, label]) => mkRow(label, data[label]));
+  const table = new Table({ rows, width: { size: 100, type: WidthType.PERCENTAGE } });
+
+  const doc = new Document({
+    styles: { default: { document: { run: { font: 'Pretendard', size: 20 } } } },
+    sections: [{
+      properties: {},
+      children: [
+        new Paragraph({
+          children: [new TextRun({ text: '■ 교재 소개 등록 요청서', bold: true, size: 28, font: 'Pretendard' })],
+          spacing: { after: 240 }
+        }),
+        table,
+      ]
+    }]
+  });
+  return await Packer.toBlob(doc);
+}
+
+// ============================================================
+// Build ZIP package
+// ============================================================
+async function buildPackage() {
+  const title = document.getElementById('f_title').value.trim();
+  const isbn = document.getElementById('f_isbn').value.trim();
+  if (!title || !isbn) {
+    toast('교재명과 ISBN은 필수입니다', 'warn');
+    return null;
+  }
+
+  const zip = new JSZip();
+  const baseName = safeName(title);
+  const folder = zip.folder(baseName);
+
+  const docxBlob = await buildDocx();
+  folder.file(`서지정보_${baseName}.docx`, docxBlob);
+
+  const coverFolder = folder.folder('표지');
+  const coverMap = { front: '01_앞표지', back: '02_뒷표지', spine: '03_세네카', full: '04_전체이미지' };
+  for (const [key, name] of Object.entries(coverMap)) {
+    if (images[key]) {
+      const ext = images[key].name.split('.').pop();
+      coverFolder.file(`${name}_${baseName}.${ext}`, images[key]);
+    }
+  }
+
+  if (images.detail) {
+    const ext = images.detail.name.split('.').pop();
+    folder.file(`상세이미지_${baseName}.${ext}`, images.detail);
+  }
+
+  const readme = [
+    `■ ${title}`,
+    `ISBN: ${isbn}`,
+    `생성일: ${new Date().toLocaleString('ko-KR')}`,
+    ``,
+    `[패키지 구성]`,
+    `- 서지정보_${baseName}.docx`,
+    `- 표지/ (01_앞표지, 02_뒷표지, 03_세네카, 04_전체이미지)`,
+    `- 상세이미지_${baseName}.*`,
+    ``,
+    `발행처: 비상교육`,
+  ].join('\n');
+  folder.file('README.txt', readme);
+
+  return { blob: await zip.generateAsync({ type: 'blob' }), name: `${baseName}_서지등록패키지.zip` };
+}
+
+// ============================================================
+// Export actions
+// ============================================================
+document.getElementById('btn_download').addEventListener('click', async () => {
+  const btn = document.getElementById('btn_download');
+  const bar = document.getElementById('loadingBar');
+  btn.disabled = true;
+  bar.classList.add('active');
+  try {
+    const pkg = await buildPackage();
+    if (!pkg) { btn.disabled = false; bar.classList.remove('active'); return; }
+    triggerDownload(pkg.blob, pkg.name);
+    await saveHistory('download');
+    toast('패키지 다운로드 완료', 'ok');
+  } catch (err) {
+    console.error(err);
+    toast('오류: ' + err.message, 'warn');
+  } finally {
+    btn.disabled = false;
+    bar.classList.remove('active');
+  }
+});
+
+document.getElementById('btn_mail').addEventListener('click', async () => {
+  const email = document.getElementById('f_email').value.trim();
+  const title = document.getElementById('f_title').value.trim();
+  const isbn = document.getElementById('f_isbn').value.trim();
+  if (!email) { toast('수신자 이메일을 입력하세요', 'warn'); return; }
+  if (!title || !isbn) { toast('교재명과 ISBN은 필수입니다', 'warn'); return; }
+
+  const btn = document.getElementById('btn_mail');
+  btn.disabled = true;
+  try {
+    const pkg = await buildPackage();
+    if (!pkg) { btn.disabled = false; return; }
+    triggerDownload(pkg.blob, pkg.name);
+
+    const subject = `[비상교육] ${title} 서지 등록 요청 (ISBN: ${isbn})`;
+    const body = [
+      `안녕하세요. 비상교육 플랫폼마케팅팀입니다.`,
+      ``,
+      `아래 신간 교재의 서지 등록을 요청드립니다.`,
+      ``,
+      `■ 교재명: ${title}`,
+      `■ ISBN: ${isbn}`,
+      `■ 정가: ${document.getElementById('f_price').value}`,
+      `■ 발행일: ${document.getElementById('f_pubdate').value}`,
+      ``,
+      `자세한 서지정보 및 표지·상세 이미지는 방금 다운로드된 ZIP 파일을 첨부해주세요.`,
+      `파일명: ${pkg.name}`,
+      ``,
+      `감사합니다.`,
+      `비상교육 플랫폼마케팅팀`,
+    ].join('\n');
+    const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailto;
+
+    await saveHistory('mail', email);
+    toast('ZIP 다운로드 후 메일 앱을 엽니다.', 'ok');
+  } catch (err) {
+    console.error(err);
+    toast('오류: ' + err.message, 'warn');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function triggerDownload(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// History (persistent via localStorage)
+// ============================================================
+const HISTORY_KEY = 'biblio_history_v1';
+
+function readHistoryStore() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    console.warn('History read failed:', e);
+    return [];
+  }
+}
+
+function writeHistoryStore(records) {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(records));
+  } catch (e) {
+    console.warn('History write failed:', e);
+  }
+}
+
+async function saveHistory(action, recipient = '') {
+  const record = {
+    id: 'r_' + Date.now(),
+    timestamp: new Date().toISOString(),
+    title: document.getElementById('f_title').value,
+    isbn: document.getElementById('f_isbn').value,
+    division: document.getElementById('f_division').value,
+    subject: document.getElementById('f_subject').value,
+    price: document.getElementById('f_price').value,
+    pubdate: document.getElementById('f_pubdate').value,
+    action: action,
+    recipient: recipient
+  };
+  const records = readHistoryStore();
+  records.push(record);
+  writeHistoryStore(records);
+}
+
+async function loadHistory() {
+  const records = readHistoryStore();
+  return records.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+}
+
+async function renderHistory() {
+  const records = await loadHistory();
+  const container = document.getElementById('historyContent');
+  document.getElementById('historyCount').textContent = records.length;
+
+  if (records.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">∅</div>
+        <div>등록 이력이 없습니다.</div>
+      </div>`;
+    return;
+  }
+
+  const divLabel = (d) => d === '초' ? '초등' : d === '중' ? '중등' : d === '고' ? '고등' : '—';
+  const actionLabel = (a) => a === 'mail' ? '메일 발송' : '패키지 다운로드';
+
+  const rows = records.map(r => {
+    const date = new Date(r.timestamp);
+    const dateStr = date.toLocaleString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    return `
+      <tr>
+        <td class="col-date">${dateStr}</td>
+        <td>${r.division ? `<span class="tag ${r.division}">${divLabel(r.division)}</span>` : '—'}</td>
+        <td>${r.subject || '—'}</td>
+        <td class="col-title">${r.title || '—'}</td>
+        <td class="col-isbn">${r.isbn || '—'}</td>
+        <td><span class="tag">${actionLabel(r.action)}</span>${r.recipient ? `<div style="font-size:10px;color:var(--ink-muted);margin-top:2px;font-family:'JetBrains Mono',monospace;">${r.recipient}</div>` : ''}</td>
+        <td class="col-actions">
+          <button class="row-btn" data-load="${r.id}">불러오기</button>
+          <button class="row-btn danger" data-del="${r.id}">삭제</button>
+        </td>
+      </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="table-wrap" style="border: none;">
+      <table class="history">
+        <thead>
+          <tr>
+            <th>일시</th>
+            <th>구분</th>
+            <th>과목</th>
+            <th>교재명</th>
+            <th>ISBN</th>
+            <th>방식</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+
+  // 행 액션
+  container.querySelectorAll('[data-load]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const rec = records.find(r => r.id === btn.dataset.load);
+      if (!rec) return;
+      document.getElementById('f_title').value = rec.title || '';
+      document.getElementById('f_isbn').value = rec.isbn || '';
+      document.getElementById('f_division').value = rec.division || '';
+      populateSubjects(null, document.getElementById('f_subject'), rec.division);
+      document.getElementById('f_subject').value = rec.subject || '';
+      document.getElementById('f_price').value = rec.price || '';
+      document.getElementById('f_pubdate').value = rec.pubdate || '';
+      updateNavBadges();
+      toast('서지정보를 불러왔습니다', 'ok');
+      // 서지정보 메뉴로 이동
+      document.querySelector('[data-view=meta]').click();
+    });
+  });
+  container.querySelectorAll('[data-del]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('이 이력을 삭제할까요?')) return;
+      try {
+        const records = readHistoryStore().filter(r => r.id !== btn.dataset.del);
+        writeHistoryStore(records);
+        renderHistory();
+        toast('이력이 삭제되었습니다');
+      } catch (e) {
+        toast('삭제 실패: ' + e.message, 'warn');
+      }
+    });
+  });
+}
+
+// ============================================================
+// Reset
+// ============================================================
+document.getElementById('btn_reset').addEventListener('click', () => {
+  if (!confirm('입력한 내용을 모두 초기화할까요?')) return;
+  FIELDS.forEach(([id]) => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('f_division').value = '';
+  document.getElementById('f_subject').innerHTML = '<option value="">교재 구분 먼저 선택</option>';
+  document.getElementById('f_subject').disabled = true;
+  document.getElementById('f_email').value = '';
+
+  // 표지 상태 리셋
+  selectedBook.division = ''; selectedBook.subject = ''; selectedBook.book = '';
+  document.getElementById('c_division').value = '';
+  document.getElementById('c_subject').innerHTML = '<option value="">교재 구분 먼저</option>';
+  document.getElementById('c_subject').disabled = true;
+  document.getElementById('c_book').innerHTML = '<option value="">과목 먼저</option>';
+  document.getElementById('c_book').disabled = true;
+  updateSelectedBookChip();
+
+  coverState.sourceImage = null;
+  spreadInput.value = '';
+  spreadUpload.hidden = false;
+  splitter.hidden = true;
+
+  // 상세 리셋
+  detailClear.click();
+
+  Object.keys(images).forEach(k => { images[k] = null; });
+  updateNavBadges();
+  toast('초기화 완료');
+});
+
+// Init
+updateNavBadges();
+</script>
+</body>
+</html>
